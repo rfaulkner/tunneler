@@ -1,0 +1,159 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
+"""
+    Executes a series of ssh tunnels.  This is particularly useful when
+    setting up access to remote instances of server processes behind an SSH
+    layer, for instance, database instances.  If muktiple conn
+"""
+
+
+__author__ = 'ryan faulkner'
+__email__ = 'rfaulkner@wikimedia.org'
+__date__ = "02-21-2013"
+__license__ = "GPL (version 2 or later)"
+
+
+import sys
+from re import search
+from os import kill
+from signal import SIGKILL
+import logging
+import argparse
+import subprocess
+import settings as conf
+
+logging.basicConfig(level=logging.DEBUG, stream=sys.stderr,
+    format='%(asctime)s %(levelname)-8s %(message)s',
+    datefmt='%b-%d %H:%M:%S')
+
+
+def parseargs():
+    """
+        Process CLI arguments.
+
+            **hosts** - a list of host names to setup ssh tunnels to.
+    """
+    parser = argparse.ArgumentParser(
+        description=
+        """
+            Command line arguments for setting up ssh tunnels.
+        """,
+        epilog="",
+        conflict_handler="resolve",
+        usage="run_ssh_tunnels <host proxy> [<host proxy>]* [-q --quiet]* "
+              "[-s --silent]* [-v --verbose]*"
+    )
+
+    parser.allow_interspersed_args = False
+
+    defaults = {
+        "quiet": 0,
+        "silent": False,
+        "verbose": 0,
+    }
+
+    parser.add_argument('hosts',
+                        nargs='*',
+                        type=str,
+                        help='The metric to compute.',
+                        default=['s1']
+                        )
+    parser.add_argument("-q", "--quiet",
+                        default=defaults["quiet"],
+                        action="count",
+                        help="decrease the logging verbosity")
+    parser.add_argument("-s", "--silent",
+                        default=defaults["silent"],
+                        action="store_true",
+                        help="silence the logger")
+    parser.add_argument("-v", "--verbose",
+                        default=defaults["verbose"],
+                        action="count",
+                        help="increase the logging verbosity")
+
+    return parser.parse_args()
+
+
+def call_tunnel(host_alias):
+    """
+        Executes call that opens an ssh tunnel to remote host.
+    """
+    cmd = 'ssh {0}@{1} -f -N -L {2}:{3}:{4}'.\
+        format(conf.TUNNEL_DATA[host_alias]['user'],
+               conf.TUNNEL_DATA[host_alias]['cluster_host'],
+               str(conf.TUNNEL_DATA[host_alias]['tunnel_port']),
+               conf.TUNNEL_DATA[host_alias]['db_host'],
+               str(conf.TUNNEL_DATA[host_alias]['remote_port'])
+               )
+    return subprocess.Popen(cmd.split(),
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE)
+
+
+def kill_procs_on_port(port):
+    """
+        Kills processes attached to the local port supplied.  The shell
+        process spawns a child process so calling 'lsof' helps to
+        locate actual attached processes rather than parents.
+    """
+    logging.debug('Killing procs on port {0}'.format(port))
+    cmd = 'lsof -w -n -i tcp:{0}'.format(port)
+    p = subprocess.Popen(cmd.split(),
+                         stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE)
+
+    for row in p.communicate()[0].strip().splitlines():
+
+        if not search('(ssh|LISTEN)', row):
+            continue
+        elems = row.split()
+
+        try:
+            pid = int(elems[1])
+        except ValueError:
+            continue
+
+        try:
+            kill(pid, SIGKILL)
+        except OSError:
+            continue
+        logging.info('Killed {0}'.format(pid))
+
+
+def main(args):
+    logging.debug('Begin execution.')
+
+    # Initiate tunnels
+    tunnels = dict()
+    for host in args.hosts:
+        tunnels[host] = call_tunnel(host)
+        logging.info('Starting tunnel for host {0} on port {1}'.format(
+            conf.TUNNEL_DATA[host]['db_host'],
+            conf.TUNNEL_DATA[host]['tunnel_port']
+        ))
+
+    # Process loop
+    try:
+        while tunnels:
+            user_in = raw_input('Type "x" to exit.\n')
+            if user_in == 'x':
+                break
+
+            # Check for dead procs
+            for host, proc in tunnels.iteritems():
+                if proc.poll():
+                    logging.info('Host {0} died.'.format(host))
+                    del tunnels[host]
+    finally:
+        for host, proc in tunnels.iteritems():
+            kill_procs_on_port(conf.TUNNEL_DATA[host]['tunnel_port'])
+
+    logging.debug('Terminate execution.')
+
+
+if __name__ == "__main__":
+    args = parseargs()
+    logging.debug(args)
+
+    sys.exit(main(args))

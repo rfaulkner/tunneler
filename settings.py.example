@@ -1,0 +1,88 @@
+"""
+    The configuration file for the user metrics project.  This module defines
+    the project level variables used to tune the execution of user metric
+    operations, set the path of resource dependencies, and define the database
+    hosts for various projects.
+
+    The init file for the config sub-package stores the details for the logger.
+
+
+    Project Settings
+    ~~~~~~~~~~~~~~~~
+
+    - **__project_home__**          : Home directory for the project
+
+
+    MediaWiki DB Settings
+    ~~~~~~~~~~~~~~~~~~~~~
+
+    Two dictionaries, **connections** which defines connection credentials
+    for data stores and **PROJECT_DB_MAP** which defines a mapping from
+    project instance to data store.
+
+
+    SSH Tunnel Parameters
+    ~~~~~~~~~~~~~~~~~~~~~
+
+    This data structure stores mappings to parameters for setting up SSH
+    tunnels to analytics databases.  This is primarily used for testing
+    and consumed by scripts/run_ssh_tunnels.
+"""
+
+from os.path import realpath
+
+# Project settings
+# ================
+
+__project_home__ = realpath('../..') + '/'
+
+
+# Database connection settings
+# ============================
+
+connections = {
+    'slave': {
+        'user': 'xxxx',
+        'host': '127.0.0.1',
+        'db': 'prod',
+        'passwd': 'yyyy',
+        'port': 3307},
+    's1': {
+        'user': 'xxxx',
+        'host': '127.0.0.1',
+        'db': 'prod',
+        'passwd': 'yyyy',
+        'port': 3307},
+    's5': {
+        'user': 'xxxx',
+        'host': '127.0.0.1',
+        'db': 'prod',
+        'passwd': 'yyyy',
+        'port': 3307},
+}
+
+PROJECT_DB_MAP = {
+    'enwiki': 's1',
+    'dewiki': 's5',
+    'itwiki': 's2',
+}
+
+# SSH Tunnel Parameters
+# =====================
+
+TUNNEL_DATA = {
+    's1': {
+        'cluster_host': 'stat1.wikimedia.org',
+        'db_host': 's1-analytics-slave.eqiad.wmnet',
+        'user': 'xxxx',
+        'remote_port': 3306,
+        'tunnel_port': 3307
+    },
+    's2': {
+        'cluster_host': 'stat1.wikimedia.org',
+        'db_host': 's2-analytics-slave.eqiad.wmnet',
+        'user': 'xxxx',
+        'remote_port': 3306,
+        'tunnel_port': 3308
+    }
+}
