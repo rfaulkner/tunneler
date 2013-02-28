@@ -1,4 +1,6 @@
 *.py[cod]
+settings.py
+.idea
 
 # C extensions
 *.so
